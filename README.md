@@ -1,4 +1,4 @@
-# CFL Scrape
+# CFLalert
 
 My first project, messy as heck.
 Early stage of a simple app to display CFL game schedule & season standings.

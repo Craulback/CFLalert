@@ -4,6 +4,7 @@
 ### My Additions ###
 *.json
 .vscode
+*.exe
 
 ### dotenv ###
 .env
