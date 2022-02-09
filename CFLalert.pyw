@@ -229,8 +229,9 @@ class App:
         self.body = Label(root, textvariable=self.body_text, font=("Leelawadee UI", 14)).pack()
         self.bottom = Frame(root)
         self.bottom.pack(side=BOTTOM) # fill=BOTH, expand=True also options
-        self.check_btn = Button(root, text="Update", command=reset_and_notify).pack(in_=self.bottom, side=RIGHT)
         self.quit_btn = Button(root, text="Exit", command=quit_program).pack(in_=self.bottom, side=RIGHT)
+        self.hide_btn = Button(root, text="Hide", command=hide_window).pack(in_=self.bottom, side=RIGHT)
+        self.check_btn = Button(root, text="Update", command=reset_and_notify).pack(in_=self.bottom, side=RIGHT)
 
 if __name__ == "__main__":
 
