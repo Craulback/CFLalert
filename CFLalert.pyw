@@ -77,7 +77,7 @@ def check_for_current_game(games):
         if active:
             return game
 
-def parse_time(iso_time):
+def split_time(iso_time):
     dt = datetime.fromisoformat(iso_time.replace('Z', '+00:00')).astimezone()
     output = dt.strftime('%A-%b-%d %I:%M%p').split(maxsplit=1)
     date = output[0].replace('-', ' ')
@@ -95,7 +95,7 @@ def future_schedule(schedule):
 #     for game in games:
 #         teams = get_teams(game)
 #         date_time = game['date_start']
-#         date, time = parse_time(date_time)
+#         date, time = split_time(date_time)
 #         if teams and date and time:
 #             details = (teams + " on " + date + " at " + time)
 #             scheduled_games.append(details)
@@ -128,8 +128,9 @@ def get_next_game():
     global current_game
     global future_games
     if current_game:
+        teams = get_teams(current_game)
         header = "Live Game: "
-        return header, current_game
+        return header, teams
     elif not current_game and future_games:
         next_game = future_games[0]
         teams = get_teams(next_game)
@@ -163,7 +164,7 @@ def gen_notification():
         toast.build().show()
     elif next_game:
         teams = get_teams(next_game)
-        date, time = parse_time(date_time)
+        date, time = split_time(date_time)
         insertion_time = parser.parse(date_time)
         difference = insertion_time - pytz.utc.localize(datetime.utcnow())
         if difference.seconds <= 300 and difference.days < 1 and notify_5m == False:
@@ -214,19 +215,18 @@ def reset_and_notify():
 class App:
     
     def update_label(self):
-        self.headerText.set(main_header)
-        self.header2Text.set(main_game)
-        self.bodyText.set(time_label)
+        self.header_text.set(main_header)
+        self.header2_text.set(main_game)
+        self.body_text.set(time_label)
     
     def __init__(self, master):
         self.master = master
-
-        self.headerText = StringVar()
-        self.header2Text = StringVar()
-        self.bodyText = StringVar()
-        self.header = Label(root, textvariable=self.headerText, font=("Leelawadee UI", 22, "bold")).pack()
-        self.header2 = Label(root, textvariable=self.header2Text, font=("Leelawadee UI", 20, "bold")).pack()
-        self.body = Label(root, textvariable=self.bodyText, font=("Leelawadee UI", 14)).pack()
+        self.header_text = StringVar()
+        self.header2_text = StringVar()
+        self.body_text = StringVar()
+        self.header = Label(root, textvariable=self.header_text, font=("Leelawadee UI", 22, "bold")).pack()
+        self.header2 = Label(root, textvariable=self.header2_text, font=("Leelawadee UI", 20, "bold")).pack()
+        self.body = Label(root, textvariable=self.body_text, font=("Leelawadee UI", 14)).pack()
         self.bottom = Frame(root)
         self.bottom.pack(side=BOTTOM) # fill=BOTH, expand=True also options
         self.check_btn = Button(root, text="Update", command=reset_and_notify).pack(in_=self.bottom, side=RIGHT)
@@ -257,7 +257,7 @@ if __name__ == "__main__":
     main_header, main_game = get_next_game()
     next_game = future_games[0]
     date_time = next_game['date_start']
-    date, time = parse_time(date_time)
+    date, time = split_time(date_time)
     time_label = str(date) + " at " + str(time)
     notify = Periodic(60,gen_notification())
 
