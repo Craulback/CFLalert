@@ -1,2 +1,2 @@
 pip install -r requirements.txt
-pyinstaller --distpath . --add-data=".\cfl.ico;." --onefile CFLalert.pyw
+pyinstaller --clean --distpath . --add-data=".\cfl.ico;." --onefile --icon=cfl.ico CFLalert.pyw
