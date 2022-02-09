@@ -1,9 +1,9 @@
 import requests
 import pytz
 import os
-import datetime
-import pystray
 # import json
+from datetime import datetime, date
+from pystray import Icon
 from pathlib import Path
 from dateutil import parser
 from dotenv import load_dotenv
@@ -15,14 +15,14 @@ from PIL import Image, ImageTk
 
 load_dotenv()
 
-def quit_window(icon, item):
+def quit_window(icon):
    icon.stop()
    root.destroy()
    
 def quit_program():
    root.destroy()
 
-def show_window(icon, item):
+def show_window(icon):
    icon.stop()
    root.after(0,root.deiconify())
 
@@ -30,7 +30,7 @@ def hide_window():
    root.withdraw()
    image=Image.open(cfl_ico)
    menu=(item('Show', show_window), item('Check Now', reset_and_notify), item('Exit', quit_window))
-   icon=pystray.Icon("name", image, "CFL Alert", menu)
+   icon=Icon("name", image, "CFL Alert", menu)
    icon.run()
 
 class Periodic(object):
@@ -78,9 +78,9 @@ def check_for_current_game(games):
             return game
 
 def parse_time(iso_time):
-    dt = datetime.datetime.fromisoformat(iso_time.replace('Z', '+00:00')).astimezone()
-    output = dt.strftime('%a-%b-%d %I:%M %p').split(maxsplit=1)
-    date = output[0]
+    dt = datetime.fromisoformat(iso_time.replace('Z', '+00:00')).astimezone()
+    output = dt.strftime('%A-%b-%d %I:%M%p').split(maxsplit=1)
+    date = output[0].replace('-', ' ')
     time = output[1]
     return date, time
 
@@ -147,47 +147,40 @@ def get_games():
     # test2.close()
     # fill_schedule(future_games)
     # print("Data loaded")
-    return games
 
 def gen_notification():
-    global current_game
-    global future_games
     global notify_5m
     global notify_24h
     global notify_1h
     global alerted
     global notify_per_game
-    global cfl_icon
     toast = None
     if current_game and alerted == False:
         notify_per_game = False
         alerted = True
         teams = get_teams(current_game)
-        date_time = current_game['date_start']
-        date, time = parse_time(date_time)
         toast = Notification(app_id="CFL Alert", title="Game Time", msg="Live now! " + teams, icon=cfl_ico, duration='long')
         toast.build().show()
     elif next_game:
         teams = get_teams(next_game)
-        date_time = next_game['date_start']
         date, time = parse_time(date_time)
         insertion_time = parser.parse(date_time)
-        difference = insertion_time - pytz.utc.localize(datetime.datetime.utcnow())
+        difference = insertion_time - pytz.utc.localize(datetime.utcnow())
         if difference.seconds <= 300 and difference.days < 1 and notify_5m == False:
             notify_5m = True
-            toast = Notification(app_id="CFL Alert", title="Game Time", msg="Next game, " + teams + " starting soon! " + time, icon=cfl_ico, duration='long')            
+            toast = Notification(app_id="CFL Alert", title="Game Time", msg="Next game: " + teams + " starting soon! " + time, icon=cfl_ico, duration='long')            
             toast.build().show()
         elif difference.seconds <= 3600 and difference.days < 1 and notify_1h == False:
             notify_1h = True
-            toast = Notification(app_id="CFL Alert", title="Game Time", msg="Next game, " + teams + " today at " + time, icon=cfl_ico, duration='long')            
+            toast = Notification(app_id="CFL Alert", title="Game Time", msg="Next game: " + teams + " today at " + time, icon=cfl_ico, duration='long')            
             toast.build().show()
         elif difference.seconds > 3600 and difference.days < 1 and notify_24h == False:
             notify_24h = True
-            toast = Notification(app_id="CFL Alert", title="Game Time", msg="Next game, " + teams + " today at " + time, icon=cfl_ico, duration='long')            
+            toast = Notification(app_id="CFL Alert", title="Game Time", msg="Next game: " + teams + " today at " + time, icon=cfl_ico, duration='long')            
             toast.build().show()
         elif difference.days > 1 and notify_per_game == False:
             notify_per_game = True
-            toast = Notification(app_id="CFL Alert", title="Game Time", msg="Next game, " + teams + " at " + time + " on " + date, icon=cfl_ico, duration='long')            
+            toast = Notification(app_id="CFL Alert", title="Game Time", msg="Next game: " + teams + " at " + time + " on " + date, icon=cfl_ico, duration='long')            
             toast.build().show()
         else:
             return None
@@ -221,9 +214,6 @@ def reset_and_notify():
 class App:
     
     def update_label(self):
-        global main_header
-        global main_game
-        global time_label
         self.headerText.set(main_header)
         self.header2Text.set(main_game)
         self.bodyText.set(time_label)
@@ -234,18 +224,13 @@ class App:
         self.headerText = StringVar()
         self.header2Text = StringVar()
         self.bodyText = StringVar()
-        self.header = Label(root, textvariable=self.headerText, font=("Leelawadee UI", 22, "bold"))
-        self.header2 = Label(root, textvariable=self.header2Text, font=("Leelawadee UI", 20, "bold"))
-        self.body = Label(root, textvariable=self.bodyText, font=("Leelawadee UI", 14))
-        self.header.pack()
-        self.header2.pack()
-        self.body.pack()        
+        self.header = Label(root, textvariable=self.headerText, font=("Leelawadee UI", 22, "bold")).pack()
+        self.header2 = Label(root, textvariable=self.header2Text, font=("Leelawadee UI", 20, "bold")).pack()
+        self.body = Label(root, textvariable=self.bodyText, font=("Leelawadee UI", 14)).pack()
         self.bottom = Frame(root)
         self.bottom.pack(side=BOTTOM) # fill=BOTH, expand=True also options
-        self.check_btn = Button(root, text="Update", command=reset_and_notify)
-        self.quit_btn = Button(root, text="Exit", command=quit_program)
-        self.quit_btn.pack(in_=self.bottom, side=RIGHT)
-        self.check_btn.pack(in_=self.bottom, side=RIGHT)
+        self.check_btn = Button(root, text="Update", command=reset_and_notify).pack(in_=self.bottom, side=RIGHT)
+        self.quit_btn = Button(root, text="Exit", command=quit_program).pack(in_=self.bottom, side=RIGHT)
 
 if __name__ == "__main__":
 
@@ -259,9 +244,9 @@ if __name__ == "__main__":
     path = Path(__file__).parent.resolve()
     cfl_ico = fr"{path}\CFL.ico"
 
-    current_year = datetime.date.today().year
+    current_year = date.today().year
     api_key = os.environ.get('CFL_API_KEY')
-    utc_time = datetime.datetime.utcnow()
+    utc_time = datetime.utcnow()
     local_time = pytz.utc.localize(utc_time, is_dst=None).astimezone()
     update_games = Periodic(3600,get_games())
     # update_standing = Periodic(3600,get_standings(current_year))
@@ -299,5 +284,5 @@ if __name__ == "__main__":
     # check for 2nd currently live game
     # do something with standings
     # pretty up the GUI
-    # use .json data instead of API calls on startup
+    # use .json data instead of API calls in som places
     # optimize, shit takes forever to start
