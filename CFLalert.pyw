@@ -1,3 +1,4 @@
+from ast import Global
 import requests
 import pytz
 import os
@@ -18,7 +19,7 @@ load_dotenv()
 def quit_window(icon):
    icon.stop()
    root.destroy()
-   
+
 def quit_program():
    root.destroy()
 
@@ -64,18 +65,20 @@ class Periodic(object):
         self._stopped = True
         self._timer.cancel()
         self._lock.release()
-        
+
 def load_data(year):
     url = f"http://api.cfl.ca/v1/games/{year}?key={api_key}"
     schedule = requests.get(url).json()
     return schedule
 
-def check_for_current_game(games):
+def check_live_game(games):
+    global live_now
+    live_now = []
     for game in games['data']:
         status = game['event_status']
         active = status['is_active']
         if active:
-            return game
+            live_now.append(game)
 
 def split_time(iso_time):
     dt = datetime.fromisoformat(iso_time.replace('Z', '+00:00')).astimezone()
@@ -89,7 +92,7 @@ def future_schedule(schedule):
         game_time = parser.parse(game['date_start'])
         if game_time > local_time:
             future_games.append(game)
-            
+
 # def fill_schedule(games):
 #     scheduled_games = []
 #     for game in games:
@@ -124,18 +127,23 @@ def get_standings(year):
     # print("Standings loaded")
     return stats
 
-def get_next_game():
-    global current_game
+def get_headers():
+    global live_now
     global future_games
-    if current_game:
-        teams = get_teams(current_game)
+    if live_now[0] and not live_now[1]:
+        teams = get_teams(live_now[0])
         header = "Live Game: "
-        return header, teams
-    elif not current_game and future_games:
+        return header, teams, None
+    elif live_now[0] and live_now[1]:
+        teams = get_teams(live_now[0])
+        teams2 = get_teams(live_now[1])
+        header = "Live Game: "
+        return header, teams, teams2
+    elif not live_now[0] and future_games:
         next_game = future_games[0]
         teams = get_teams(next_game)
         header = "Next Game: "
-        return header, teams
+        return header, teams, None
     else:
         return "Next Game: ", "No data"
 
@@ -155,12 +163,23 @@ def gen_notification():
     global notify_1h
     global alerted
     global notify_per_game
+    global date_time
     toast = None
-    if current_game and alerted == False:
+    if live_now[0] and alerted == False and not live_now[1]:
         notify_per_game = False
         alerted = True
-        teams = get_teams(current_game)
-        toast = Notification(app_id="CFL Alert", title="Game Time", msg="Live now! " + teams, icon=cfl_ico, duration='long')
+        teams = get_teams(live_now[0])
+        date, time = split_time(date_time)
+        toast = Notification(app_id="CFL Alert", title="Game Time", msg="Live now! " + teams + " started at " + time, icon=cfl_ico, duration='long')
+        toast.build().show()
+    elif live_now[1] and alerted == False:
+        notify_per_game = False
+        alerted = True
+        teams = get_teams(live_now[0])
+        teams2 = get_teams(live_now[1])
+        date, time = split_time(date_time)
+        date, time2 = split_time(date_time2)
+        toast = Notification(app_id="CFL Alert", title="Game Time", msg="2 Live Games! " + teams + " started at " + time + " and " + teams2 + " started at " + time2, icon=cfl_ico, duration='long')
         toast.build().show()
     elif next_game:
         teams = get_teams(next_game)
@@ -189,7 +208,7 @@ def gen_notification():
 def reset_notify_24h():
     global notify_24h
     notify_24h = False
-   
+
 def reset_notify_current():
     global alerted
     alerted = False
@@ -212,30 +231,70 @@ def reset_and_notify():
     gen_notification()
     app.update_label()
 
+def get_time_label():
+    global time_label
+    global time_label2
+    global date_time
+    global date_time2
+    if live_now[0] and not live_now[1]:
+        date_time = live_now[0]['date_start']
+        date, time = split_time(date_time)
+        time_label = "Started at " + str(time)
+        app.destroy_label()
+    elif live_now[0] and live_now[1]:
+        date_time = live_now[0]['date_start']
+        date, time = split_time(date_time)
+        date_time2 = live_now[1]['date_start']
+        date, time2 = split_time(date_time)
+        time_label = "Started at " + str(time)
+        time_label2 = "Started at " + str(time2)
+        app.pack_labels()
+    else:
+        date_time = next_game['date_start']
+        date, time = split_time(date_time)
+        time_label = str(date) + " at " + str(time)
 class App:
-    
+
     def update_label(self):
         self.header_text.set(main_header)
-        self.header2_text.set(main_game)
+        self.header2_text.set(main_teams)
         self.body_text.set(time_label)
+        if self.body2:
+            self.header3_text.set(main_header)
+            self.header4_text.set(main_teams2)
+            self.body2_text.set(time_label2)
     
+    def destroy_label(self):
+        if self.body2:
+            self.header3.destroy()
+            self.header4.destroy()
+            self.body2.destroy()
+
+    def pack_labels(self):
+        self.header3 = Label(root, textvariable=self.header3_text, font=("Leelawadee UI", 22, "bold")).pack(in_=self.top, side=TOP)
+        self.header4 = Label(root, textvariable=self.header4_text, font=("Leelawadee UI", 20, "bold")).pack(in_=self.top, side=TOP)
+        self.body2 = Label(root, textvariable=self.body2_text, font=("Leelawadee UI", 14)).pack(in_=self.top, side=TOP)
+
     def __init__(self, master):
         self.master = master
         self.header_text = StringVar()
         self.header2_text = StringVar()
         self.body_text = StringVar()
-        self.header = Label(root, textvariable=self.header_text, font=("Leelawadee UI", 22, "bold")).pack()
-        self.header2 = Label(root, textvariable=self.header2_text, font=("Leelawadee UI", 20, "bold")).pack()
-        self.body = Label(root, textvariable=self.body_text, font=("Leelawadee UI", 14)).pack()
+        self.top = Frame(root)
+        self.top.pack(side=TOP)
         self.bottom = Frame(root)
         self.bottom.pack(side=BOTTOM) # fill=BOTH, expand=True also options
         self.quit_btn = Button(root, text="Exit", command=quit_program).pack(in_=self.bottom, side=RIGHT)
         self.hide_btn = Button(root, text="Hide", command=hide_window).pack(in_=self.bottom, side=RIGHT)
         self.check_btn = Button(root, text="Update", command=reset_and_notify).pack(in_=self.bottom, side=RIGHT)
+        self.header = Label(root, textvariable=self.header_text, font=("Leelawadee UI", 22, "bold")).pack(in_=self.top, side=TOP)
+        self.header2 = Label(root, textvariable=self.header2_text, font=("Leelawadee UI", 20, "bold")).pack(in_=self.top, side=TOP)
+        self.body = Label(root, textvariable=self.body_text, font=("Leelawadee UI", 14)).pack(in_=self.top, side=TOP)
 
 if __name__ == "__main__":
 
     future_games = []
+    live_now = []
     notify_per_game = False
     notify_5m = False
     notify_1h = False
@@ -249,17 +308,14 @@ if __name__ == "__main__":
     api_key = os.environ.get('CFL_API_KEY')
     utc_time = datetime.utcnow()
     local_time = pytz.utc.localize(utc_time, is_dst=None).astimezone()
-    update_games = Periodic(3600,get_games())
+    update_games = Periodic(300,get_games())
     # update_standing = Periodic(3600,get_standings(current_year))
     reset_hour = Periodic(3600,reset_notify_1h())
     reset_alert = Periodic(14400,reset_notify_current())
     reset_24 = Periodic(86400,reset_notify_24h())
-    current_game = check_for_current_game(games)
-    main_header, main_game = get_next_game()
+    check_live = Periodic(300,check_live_game(games))
+    main_header, main_teams, main_teams2 = get_headers()
     next_game = future_games[0]
-    date_time = next_game['date_start']
-    date, time = split_time(date_time)
-    time_label = str(date) + " at " + str(time)
     notify = Periodic(60,gen_notification())
 
     root=Tk()
@@ -267,9 +323,8 @@ if __name__ == "__main__":
     root.iconbitmap(cfl_ico)
 
     app = App(root)
-    
+    get_time_label()
     update_labels = Periodic(30,app.update_label())
-    
     root.protocol('WM_DELETE_WINDOW', hide_window)
     root.mainloop()
     update_games.stop()
@@ -279,10 +334,10 @@ if __name__ == "__main__":
     reset_24.stop()
     notify.stop()
     update_labels.stop()
+    check_live.stop()
 
     #TODO
     # filter out games with --- for team
-    # check for 2nd currently live game
     # do something with standings
     # pretty up the GUI
     # use .json data instead of API calls in som places
