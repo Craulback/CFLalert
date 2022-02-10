@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from winotify import Notification
 from threading import Timer, Lock
 from tkinter import *
+from tkinter import ttk
 from pystray import MenuItem as item
 from PIL import Image, ImageTk
 
@@ -248,7 +249,7 @@ def get_time_label():
         date, time2 = split_time(date_time)
         time_label = "Started at " + str(time)
         time_label2 = "Started at " + str(time2)
-        app.pack_labels()
+        app.pack_game2()
     else:
         date_time = next_game['date_start']
         date, time = split_time(date_time)
@@ -276,16 +277,23 @@ class App:
         except:
             pass
 
-    def pack_labels(self):
-        self.header3 = Label(root, textvariable=self.header3_text, font=("Leelawadee UI", 22, "bold")).pack(in_=self.top, side=TOP)
-        self.header4 = Label(root, textvariable=self.header4_text, font=("Leelawadee UI", 20, "bold")).pack(in_=self.top, side=TOP)
-        self.body2 = Label(root, textvariable=self.body2_text, font=("Leelawadee UI", 14)).pack(in_=self.top, side=TOP)
+    def pack_game2(self):
+        self.mid = Frame(root)
+        self.mid.pack()
+        self.header3 = Label(root, textvariable=self.header3_text, font=("Leelawadee UI", 22, "bold")).pack(in_=self.mid, side=TOP)
+        self.header4 = Label(root, textvariable=self.header4_text, font=("Leelawadee UI", 20, "bold")).pack(in_=self.mid, side=TOP)
+        self.body2 = Label(root, textvariable=self.body2_text, font=("Leelawadee UI", 14)).pack(in_=self.mid, side=TOP)
+        self.separator.pack(fill='x')
 
     def __init__(self, master):
         self.master = master
         self.header_text = StringVar()
         self.header2_text = StringVar()
         self.body_text = StringVar()
+        self.header3_text = StringVar()
+        self.header4_text = StringVar()
+        self.body2_text = StringVar()
+        self.separator = ttk.Separator(root, orient='horizontal')
         self.top = Frame(root)
         self.top.pack(side=TOP)
         self.bottom = Frame(root)
@@ -296,6 +304,7 @@ class App:
         self.header = Label(root, textvariable=self.header_text, font=("Leelawadee UI", 22, "bold")).pack(in_=self.top, side=TOP)
         self.header2 = Label(root, textvariable=self.header2_text, font=("Leelawadee UI", 20, "bold")).pack(in_=self.top, side=TOP)
         self.body = Label(root, textvariable=self.body_text, font=("Leelawadee UI", 14)).pack(in_=self.top, side=TOP)
+        self.separator.pack(fill='x')
 
 if __name__ == "__main__":
 
