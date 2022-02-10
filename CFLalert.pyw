@@ -1,4 +1,3 @@
-from ast import Global
 import requests
 import pytz
 import os
@@ -130,16 +129,17 @@ def get_standings(year):
 def get_headers():
     global live_now
     global future_games
-    if live_now[0] and not live_now[1]:
-        teams = get_teams(live_now[0])
-        header = "Live Game: "
-        return header, teams, None
-    elif live_now[0] and live_now[1]:
-        teams = get_teams(live_now[0])
-        teams2 = get_teams(live_now[1])
-        header = "Live Game: "
-        return header, teams, teams2
-    elif not live_now[0] and future_games:
+    if live_now:
+        if len(live_now) == 1:
+            teams = get_teams(live_now[0])
+            header = "Live Game: "
+            return header, teams, None
+        elif len(live_now) > 1:
+            teams = get_teams(live_now[0])
+            teams2 = get_teams(live_now[1])
+            header = "Live Game: "
+            return header, teams, teams2
+    elif not live_now and future_games:
         next_game = future_games[0]
         teams = get_teams(next_game)
         header = "Next Game: "
@@ -165,14 +165,14 @@ def gen_notification():
     global notify_per_game
     global date_time
     toast = None
-    if live_now[0] and alerted == False and not live_now[1]:
+    if live_now and alerted == False and not len(live_now) == 1:
         notify_per_game = False
         alerted = True
         teams = get_teams(live_now[0])
         date, time = split_time(date_time)
         toast = Notification(app_id="CFL Alert", title="Game Time", msg="Live now! " + teams + " started at " + time, icon=cfl_ico, duration='long')
         toast.build().show()
-    elif live_now[1] and alerted == False:
+    elif len(live_now) > 1 and alerted == False:
         notify_per_game = False
         alerted = True
         teams = get_teams(live_now[0])
@@ -236,12 +236,12 @@ def get_time_label():
     global time_label2
     global date_time
     global date_time2
-    if live_now[0] and not live_now[1]:
+    if len(live_now) == 1:
         date_time = live_now[0]['date_start']
         date, time = split_time(date_time)
         time_label = "Started at " + str(time)
         app.destroy_label()
-    elif live_now[0] and live_now[1]:
+    elif len(live_now) > 1:
         date_time = live_now[0]['date_start']
         date, time = split_time(date_time)
         date_time2 = live_now[1]['date_start']
@@ -259,16 +259,22 @@ class App:
         self.header_text.set(main_header)
         self.header2_text.set(main_teams)
         self.body_text.set(time_label)
-        if self.body2:
-            self.header3_text.set(main_header)
-            self.header4_text.set(main_teams2)
-            self.body2_text.set(time_label2)
-    
+        try:
+            if self.body2.winfo_exists() == 1:
+                self.header3_text.set(main_header)
+                self.header4_text.set(main_teams2)
+                self.body2_text.set(time_label2)
+        except:
+            pass
+
     def destroy_label(self):
-        if self.body2:
-            self.header3.destroy()
-            self.header4.destroy()
-            self.body2.destroy()
+        try:
+            if self.body2.winfo_exists() == 1:
+                self.header3.destroy()
+                self.header4.destroy()
+                self.body2.destroy()
+        except:
+            pass
 
     def pack_labels(self):
         self.header3 = Label(root, textvariable=self.header3_text, font=("Leelawadee UI", 22, "bold")).pack(in_=self.top, side=TOP)
@@ -316,7 +322,6 @@ if __name__ == "__main__":
     check_live = Periodic(300,check_live_game(games))
     main_header, main_teams, main_teams2 = get_headers()
     next_game = future_games[0]
-    notify = Periodic(60,gen_notification())
 
     root=Tk()
     root.title("CFL Alert")
@@ -324,6 +329,7 @@ if __name__ == "__main__":
 
     app = App(root)
     get_time_label()
+    notify = Periodic(60,gen_notification())
     update_labels = Periodic(30,app.update_label())
     root.protocol('WM_DELETE_WINDOW', hide_window)
     root.mainloop()
