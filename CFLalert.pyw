@@ -141,13 +141,12 @@ def gen_notification():
                              msg="2 Live Games! Open CFL Alert for details.", icon=cfl_ico, duration='long')
         # toast.add_actions(label="Click here to open", show_window)
         toast.build().show()
-    elif next_game:
-        global standings
+    elif future_games[0]:
         if alerted == True:
             get_standings(current_year)
             alerted = False
-        date_time = next_game['date_start']
-        teams = get_teams(next_game)
+        date_time = future_games[0]['date_start']
+        teams = get_teams(future_games[0])
         date, time = split_time(date_time)
         insertion_time = parser.parse(date_time)
         difference = insertion_time - pytz.utc.localize(datetime.utcnow())
@@ -191,7 +190,12 @@ def reset_alerts():
 def reset_and_notify():
     reset_alerts()
     gen_notification()
-    app.get_labels()
+    if app.sched_stand_toggle.get() == "Show Standings":
+        app.destroy_labels()
+        app.get_labels()
+    elif app.sched_stand_toggle.get() == "Show Game Time":
+        app.destroy_labels()
+        app.pack_standings()
 
 class App:
 
@@ -200,21 +204,86 @@ class App:
             label.destroy()
     
     def pack_game(self):
+        self.top = Frame(root)
+        self.top.pack(side=TOP)
         self.header = Label(root, textvariable=self.header_text, font=("Leelawadee UI", 22, "bold"))
         self.teams = Label(root, textvariable=self.teams_text, font=("Leelawadee UI", 20, "bold"))
         self.body = Label(root, textvariable=self.body_text, font=("Leelawadee UI", 14))
         self.header.pack(in_=self.top, side=TOP)
         self.teams.pack(in_=self.top, side=TOP)
         self.body.pack(in_=self.top, side=TOP)
-        self.separator.pack(fill='x')
-        self.labels.append(self.header)
-        self.labels.append(self.teams)
-        self.labels.append(self.body)
-
+        self.separator = ttk.Separator(self.top, orient='horizontal')
+        self.separator.pack(in_=self.top,fill='x')
+        self.labels.append(self.top)
+    
+    def pack_standings(self):
+        with open('standings.json') as standings_file:
+            standings = json.load(standings_file)
+            standings_file.close()
+        iid_var = 0
+        self.main_frame = Frame(root)
+        self.main_frame.pack(side=TOP)
+        self.table_frame_w = Frame(self.main_frame)
+        self.table_frame_w.pack(side=LEFT)
+        self.separator = ttk.Separator(self.main_frame,orient=VERTICAL)
+        self.separator.pack(in_=self.main_frame,side=RIGHT)
+        self.table_frame_e = Frame(self.main_frame)
+        self.table_frame_e.pack(side=RIGHT)
+        self.table_w = ttk.Treeview(self.table_frame_w)
+        self.table_e = ttk.Treeview(self.table_frame_e)
+        self.table_w.pack(in_=self.table_frame_w,side=BOTTOM)
+        self.table_e.pack(in_=self.table_frame_e,side=BOTTOM)
+        self.labels.append(self.main_frame)
+        
+        self.title = Label(self.table_frame_w, text="Western Division",font=("Leelawadee UI", 16))
+        self.title.pack(in_=self.table_frame_w, side=TOP)
+        for stand in standings['data']['divisions']['west']['standings']:
+            team_name = stand['abbreviation'] + " " + stand['nickname']
+            position = stand['place']
+            w_l_t = str(stand['wins']) + " / " + str(stand['losses']) + " / " + str(stand['ties'])
+            #columns
+            self.table_w['columns'] = ('position', 'team_name', 'w_l_t')
+            self.table_w.column("#0", width=0, stretch=NO)
+            self.table_w.column("position",anchor=CENTER, width=80)
+            self.table_w.column("team_name",anchor=CENTER, width=110)
+            self.table_w.column("w_l_t",anchor=CENTER, width=80)
+            #headings
+            self.table_w.heading("position", text="Place",anchor=CENTER)
+            self.table_w.heading("team_name", text="Team",anchor=CENTER)
+            self.table_w.heading("w_l_t", text="W / L / T",anchor=CENTER)
+            #add data
+            self.table_w.insert(parent='',index='end',iid=iid_var,text='',
+                                values=(position, team_name, w_l_t))
+            self.table_w.pack()
+            iid_var +=1
+        iid_var = 0
+        self.title = Label(self.table_frame_e, text="Eastern Division",font=("Leelawadee UI", 16))
+        self.title.pack(in_=self.table_frame_e, side=TOP)
+        for stand in standings['data']['divisions']['east']['standings']:
+            team_name = stand['abbreviation'] + " " + stand['nickname']
+            position = stand['place']
+            w_l_t = str(stand['wins']) + " / " + str(stand['losses']) + " / " + str(stand['ties'])
+            #columns
+            self.table_e['columns'] = ('position', 'team_name', 'w_l_t')
+            self.table_e.column("#0", width=0, stretch=NO)
+            self.table_e.column("position",anchor=CENTER, width=80)
+            self.table_e.column("team_name",anchor=CENTER, width=110)
+            self.table_e.column("w_l_t",anchor=CENTER, width=80)
+            #headings
+            self.table_e.heading("position", text="Place",anchor=CENTER)
+            self.table_e.heading("team_name", text="Team",anchor=CENTER)
+            self.table_e.heading("w_l_t", text="W / L / T",anchor=CENTER)
+            #add data
+            self.table_e.insert(parent='',index='end',iid=iid_var,text='',
+                                values=(position, team_name, w_l_t))
+            self.table_e.pack()
+            iid_var +=1
+        
     def toggle_standings(self):
         if self.sched_stand_toggle.get() == "Show Standings":
             self.destroy_labels()
             self.sched_stand_toggle.set("Show Game Time")
+            self.pack_standings()
         elif self.sched_stand_toggle.get() == "Show Game Time":
             self.destroy_labels()
             self.get_labels()
@@ -233,10 +302,21 @@ class App:
                 self.teams_text.set(teams)
                 self.body_text.set(time_label)
                 self.pack_game()
+
+            header = "Next Game:"
+            teams = get_teams(future_games[0])
+            date_time = future_games[0]['date_start']
+            date, time = split_time(date_time)
+            time_label = date + " at " + time
+            self.header_text.set(header)
+            self.teams_text.set(teams)
+            self.body_text.set(time_label)
+            self.pack_game()
+            
         else:
             header = "Next Game:"
-            teams = get_teams(next_game)
-            date_time = next_game['date_start']
+            teams = get_teams(future_games[0])
+            date_time = future_games[0]['date_start']
             date, time = split_time(date_time)
             time_label = date + " at " + time
             self.destroy_labels()
@@ -253,9 +333,6 @@ class App:
         self.header_text = StringVar(root)
         self.teams_text = StringVar(root)
         self.body_text = StringVar(root)
-        self.separator = ttk.Separator(root, orient='horizontal')
-        self.top = Frame(root)
-        self.top.pack(side=TOP)
         self.bottom = Frame(root)
         self.bottom.pack(side=BOTTOM)
         self.show_standings_btn = Button(root, textvariable=self.sched_stand_toggle, command=self.toggle_standings).pack(in_=self.bottom)
@@ -281,24 +358,22 @@ if __name__ == "__main__":
     api_key = os.environ.get('CFL_API_KEY')
     utc_time = datetime.utcnow()
     local_time = pytz.utc.localize(utc_time, is_dst=None).astimezone()
-    update_sched = Periodic(300,get_games())
-    # update_standing = Periodic(3600,get_standings(current_year))
-    next_game = future_games[0]
+    update_games = Periodic(300,get_games())
+    get_standings(current_year)
 
     root=Tk()
     root.title("CFL Alert")
     root.iconbitmap(cfl_ico)
+    root.protocol('WM_DELETE_WINDOW', hide_window)
 
     app = App(root)
     notify = Periodic(60,gen_notification())
-    root.protocol('WM_DELETE_WINDOW', hide_window)
+    root.resizable(False, False)
     root.mainloop()
-    update_sched.stop()
-    # update_standings.stop()
+    update_games.stop()
     notify.stop()
 
     #TODO
-    # do something with standings
     # pretty up the GUI
     # use .json data instead of API calls in some places
     # optimize, shit takes forever to start
