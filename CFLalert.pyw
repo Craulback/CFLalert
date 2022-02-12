@@ -82,6 +82,15 @@ def check_live_game(games):
         if active:
             live_now.append(game)
 
+def check_score(game):
+    t1_score = game['team_1']['score']
+    t2_score = game['team_2']['score']
+    if game['team_1']['is_at_home'] == False:
+        result = "Score: " + str(t1_score) + " - " + str(t2_score)
+    if game['team_1']['is_at_home']:
+        result = "Score: " + str(t2_score) + " - " + str(t1_score)
+    return result
+
 def split_time(iso_time):
     dt = datetime.fromisoformat(iso_time.replace('Z', '+00:00')).astimezone()
     dt = dt.strftime('%A-%b-%d %I:%M%p').split(maxsplit=1)
@@ -212,6 +221,9 @@ class App:
         self.header.pack(in_=self.top, side=TOP)
         self.teams.pack(in_=self.top, side=TOP)
         self.body.pack(in_=self.top, side=TOP)
+        if len(live_now) > 0:
+            self.score = Label(root, textvariable=self.score_text, font=("Leelawadee UI",18, "bold"))
+            self.score.pack(in_=self.top, side=TOP)
         self.separator = ttk.Separator(self.top, orient='horizontal')
         self.separator.pack(in_=self.top,fill='x')
         self.labels.append(self.top)
@@ -298,6 +310,8 @@ class App:
                 date_time = game['date_start']
                 date, time = split_time(date_time)
                 time_label = "Started at " + time
+                score = check_score(game)
+                self.score_text.set(score)
                 self.header_text.set(header)
                 self.teams_text.set(teams)
                 self.body_text.set(time_label)
@@ -307,6 +321,10 @@ class App:
             teams = get_teams(future_games[0])
             date_time = future_games[0]['date_start']
             date, time = split_time(date_time)
+            date_time = parser.parse(date_time)
+            difference = date_time - pytz.utc.localize(datetime.utcnow())
+            if difference.days < 1:
+                date = "Today"
             time_label = date + " at " + time
             self.header_text.set(header)
             self.teams_text.set(teams)
@@ -318,6 +336,10 @@ class App:
             teams = get_teams(future_games[0])
             date_time = future_games[0]['date_start']
             date, time = split_time(date_time)
+            date_time = parser.parse(date_time)
+            difference = date_time - pytz.utc.localize(datetime.utcnow())
+            if difference.days < 1:
+                date = "Today"
             time_label = date + " at " + time
             self.destroy_labels()
             self.header_text.set(header)
@@ -332,6 +354,7 @@ class App:
         self.sched_stand_toggle.set("Show Standings")
         self.header_text = StringVar(root)
         self.teams_text = StringVar(root)
+        self.score_text = StringVar(root)
         self.body_text = StringVar(root)
         self.bottom = Frame(root)
         self.bottom.pack(side=BOTTOM)
@@ -375,5 +398,3 @@ if __name__ == "__main__":
 
     #TODO
     # pretty up the GUI
-    # use .json data instead of API calls in some places
-    # optimize, shit takes forever to start
