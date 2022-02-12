@@ -1,6 +1,7 @@
 import requests
 import pytz
 import os
+import json
 from datetime import datetime, date
 from pystray import Icon
 from pathlib import Path
@@ -25,13 +26,14 @@ def quit_from_window():
 def show_window(icon):
     icon.stop()
     root.after(0,root.deiconify())
-    app.get_labels()
+    if app.sched_stand_toggle.get() == "Show Standings":
+        app.get_labels()
 
 def hide_window():
     root.withdraw()
     image=Image.open(cfl_ico)
     menu=(item('Show', show_window), item('Check Now', reset_and_notify), item('Exit', quit_from_tray))
-    icon=Icon("CFL.ico", image, "CFL Alert", menu)
+    icon=Icon("name", image, "CFL Alert", menu)
     icon.run()
 
 class Periodic(object):
@@ -82,9 +84,9 @@ def check_live_game(games):
 
 def split_time(iso_time):
     dt = datetime.fromisoformat(iso_time.replace('Z', '+00:00')).astimezone()
-    output = dt.strftime('%A-%b-%d %I:%M%p').split(maxsplit=1)
-    date = output[0].replace('-', ' ')
-    time = output[1]
+    dt = dt.strftime('%A-%b-%d %I:%M%p').split(maxsplit=1)
+    date = dt[0].replace('-', ' ')
+    time = dt[1]
     return date, time
 
 def get_teams(game):
@@ -102,8 +104,10 @@ def get_teams(game):
 
 def get_standings(year):
     url = f"http://api.cfl.ca/v1/standings/{year}?key={api_key}"
-    stats = requests.get(url).json()
-    return stats
+    standings = requests.get(url).json()
+    stand = open("standings.json", "w")
+    json.dump(standings, stand, ensure_ascii=False, indent=4)
+    stand.close()
 
 def get_games():
     global games
@@ -116,45 +120,49 @@ def get_games():
             future_games.append(game)
 
 def gen_notification():
-    global notify_5m
-    global notify_24h
-    global notify_1h
-    global alerted
+    global alerted_5m
+    global alerted_today
+    global alerted_1h
     global notify_per_game
-    global date_time
-    toast = None
-    if live_now and alerted == False and len(live_now) == 1:
-        notify_per_game = False
+    global alerted
+    if alerted == False and len(live_now) == 1:
+        reset_alerts()
         alerted = True
         teams = get_teams(live_now[0])
+        date_time = live_now[0]['date_start']
         date, time = split_time(date_time)
         toast = Notification(app_id="CFL Alert", title="Game Time", 
                              msg="Live now! " + teams + " started at " + time, icon=cfl_ico, duration='long')
         toast.build().show()
-    elif len(live_now) > 1 and alerted == False:
-        notify_per_game = False
+    elif alerted == False and len(live_now) > 1:
+        reset_alerts()
         alerted = True
         toast = Notification(app_id="CFL Alert", title="Game Time", 
-                             msg="2 Live Games! Open CFL Alert to see details.", icon=cfl_ico, duration='long')
+                             msg="2 Live Games! Open CFL Alert for details.", icon=cfl_ico, duration='long')
         # toast.add_actions(label="Click here to open", show_window)
         toast.build().show()
     elif next_game:
+        global standings
+        if alerted == True:
+            get_standings(current_year)
+            alerted = False
+        date_time = next_game['date_start']
         teams = get_teams(next_game)
         date, time = split_time(date_time)
         insertion_time = parser.parse(date_time)
         difference = insertion_time - pytz.utc.localize(datetime.utcnow())
-        if difference.seconds <= 300 and difference.days < 1 and notify_5m == False:
-            notify_5m = True
+        if difference.seconds <= 300 and difference.days < 1 and alerted_5m == False:
+            alerted_5m = True
             toast = Notification(app_id="CFL Alert", title="Game Time", 
                                  msg="Next game: " + teams + " starting soon! " + time, icon=cfl_ico, duration='long')            
             toast.build().show()
-        elif difference.seconds <= 3600 and notify_1h == False:
-            notify_1h = True
+        elif difference.seconds <= 3600 and difference.days < 1 and alerted_1h == False:
+            alerted_1h = True
             toast = Notification(app_id="CFL Alert", title="Game Time", 
                                  msg="Next game: " + teams + " today at " + time, icon=cfl_ico, duration='long')            
             toast.build().show()
-        elif difference.seconds > 3600 and difference.days < 1 and notify_24h == False:
-            notify_24h = True
+        elif difference.seconds > 3600 and difference.days < 1 and alerted_today == False:
+            alerted_today = True
             toast = Notification(app_id="CFL Alert", title="Game Time", 
                                  msg="Next game: " + teams + " today at " + time, icon=cfl_ico, duration='long')            
             toast.build().show()
@@ -165,33 +173,25 @@ def gen_notification():
             toast.build().show()
         else:
             pass
+    else:
+        pass
 
-def reset_notify_24h():
-    global notify_24h
-    notify_24h = False
-
-def reset_notify_current():
+def reset_alerts():
+    global alerted_5m
+    global alerted_1h
+    global alerted_today
+    global notify_per_game
     global alerted
     alerted = False
- 
-def reset_notify_1h():
-    global notify_1h
-    global notify_5m
-    notify_1h = False
-    notify_5m = False
-
-def reset_once_per_game():
-    global notify_per_game
+    alerted_5m = False
+    alerted_1h = False
+    alerted_today = False
     notify_per_game = False
 
 def reset_and_notify():
-    reset_once_per_game()
-    reset_notify_current()
-    reset_notify_24h()
-    reset_notify_1h()
+    reset_alerts()
     gen_notification()
     app.get_labels()
-
 
 class App:
 
@@ -221,7 +221,6 @@ class App:
             self.sched_stand_toggle.set("Show Standings")
                 
     def get_labels(self):
-        global date_time
         if len(live_now) > 0:
             self.destroy_labels()
             for game in live_now:
@@ -229,7 +228,7 @@ class App:
                 teams = get_teams(game)
                 date_time = game['date_start']
                 date, time = split_time(date_time)
-                time_label = "Started at " + str(time)
+                time_label = "Started at " + time
                 self.header_text.set(header)
                 self.teams_text.set(teams)
                 self.body_text.set(time_label)
@@ -239,7 +238,7 @@ class App:
             teams = get_teams(next_game)
             date_time = next_game['date_start']
             date, time = split_time(date_time)
-            time_label = str(date) + " at " + str(time)
+            time_label = date + " at " + time
             self.destroy_labels()
             self.header_text.set(header)
             self.teams_text.set(teams)
@@ -262,7 +261,7 @@ class App:
         self.show_standings_btn = Button(root, textvariable=self.sched_stand_toggle, command=self.toggle_standings).pack(in_=self.bottom)
         self.quit_btn = Button(root, text="Exit", command=quit_from_window).pack(in_=self.bottom, side=RIGHT)
         self.hide_btn = Button(root, text="Hide", command=hide_window).pack(in_=self.bottom, side=RIGHT)
-        self.update_btn = Button(root, text="Update", command=self.get_labels).pack(in_=self.bottom, side=RIGHT)
+        self.update_btn = Button(root, text="Update", command=reset_and_notify).pack(in_=self.bottom, side=RIGHT)
         self.get_labels()
 
 if __name__ == "__main__":
@@ -271,10 +270,10 @@ if __name__ == "__main__":
     live_now = []
     games = None
     notify_per_game = False
-    notify_5m = False
-    notify_1h = False
-    notify_24h = False
     alerted = False
+    alerted_5m = False
+    alerted_1h = False
+    alerted_today = False
     path = Path(__file__).parent.resolve()
     cfl_ico = fr"{path}\CFL.ico"
 
@@ -284,9 +283,6 @@ if __name__ == "__main__":
     local_time = pytz.utc.localize(utc_time, is_dst=None).astimezone()
     update_sched = Periodic(300,get_games())
     # update_standing = Periodic(3600,get_standings(current_year))
-    reset_hour = Periodic(3600,reset_notify_1h())
-    reset_alert = Periodic(14400,reset_notify_current())
-    reset_24 = Periodic(86400,reset_notify_24h())
     next_game = future_games[0]
 
     root=Tk()
@@ -299,9 +295,6 @@ if __name__ == "__main__":
     root.mainloop()
     update_sched.stop()
     # update_standings.stop()
-    reset_alert.stop()
-    reset_hour.stop()
-    reset_24.stop()
     notify.stop()
 
     #TODO
